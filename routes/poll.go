@@ -44,9 +44,15 @@ func GetPollByID(c *gin.Context) {
 
 func CreatePoll(c *gin.Context) {
 
+	userId := c.GetUint("userId")
+
+	if userId == 0 {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
 	type CreatePollInput struct {
 		Question string `form:"question" binding:"required"`
-		UserID   uint   `form:"user_id" binding:"required"`
 	}
 
 	var input CreatePollInput
@@ -58,7 +64,7 @@ func CreatePoll(c *gin.Context) {
 		return
 	}
 
-	poll := models.Poll{Question: input.Question, UserID: input.UserID}
+	poll := models.Poll{Question: input.Question, UserID: userId}
 
 	result := db.DB.Create(&poll)
 
@@ -99,7 +105,6 @@ func UpdatePoll(c *gin.Context) {
 	}
 
 	poll.Question = input.Question
-	poll.UserID = input.UserID
 
 	result = db.DB.Save(&poll)
 
@@ -138,8 +143,55 @@ func DeletePoll(c *gin.Context) {
 
 func VotePoll(c *gin.Context) {
 
+	userId := c.GetUint("userId")
+
+	if userId == 0 {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
+	type VotePollInput struct {
+		OptionID uint `form:"option_id" binding:"required"`
+	}
+
+	var input VotePollInput
+
+	err := c.ShouldBind(&input)
+
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	vote := models.Vote{UserID: userId, OptionID: input.OptionID}
+
+	result := db.DB.Create(&vote)
+
+	if result != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusCreated, vote)
+
 }
 
 func UnvotePoll(c *gin.Context) {
+	userId := c.GetUint("userId")
 
+	if userId == 0 {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
+	pollId := c.Param("id")
+
+	result := db.DB.Where("user_id = ? AND poll_id = ?", userId, pollId).Delete(&models.Vote{})
+
+	if result.Error != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Status(200)
 }
